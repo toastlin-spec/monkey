@@ -21,6 +21,7 @@
         <button id="btn-play" class="btn big primary">🎮 開始冒險</button>
         <button id="btn-talent" class="btn big">⭐ 天賦升級 <span id="menu-stars" class="pill"></span></button>
         <button id="btn-help" class="btn big">📖 遊戲說明</button>
+        <button id="btn-audio" class="btn big">🔊 音量設定</button>
       </div>
     </div>
     <div class="parade"><span>🐰</span><span>🐭</span><span>🐗</span><span>🦅</span><span>🐆</span><span>🐸</span><span>🦘</span><span>🦏</span><span>🐹</span><span>🐒</span><span>🦎</span><span>🐘</span></div>
@@ -59,6 +60,8 @@
       <div class="seg" id="speed-btns">
         <button data-speed="1" class="on">1×</button><button data-speed="2">2×</button><button data-speed="3">3×</button>
       </div>
+      <button class="btn icon" id="btn-music" title="背景音樂開關">🎵</button>
+      <button class="btn icon" id="btn-sfx" title="音效開關">🔊</button>
       <button class="btn icon" id="btn-pause" title="暫停">⏸</button>
     </header>
     <div id="game-body">
@@ -84,6 +87,7 @@
 </div>
 
 <script src="js/data.js"></script>
+<script src="js/audio.js"></script>
 <script src="js/game.js"></script>
 <script src="js/main.js"></script>
 </body>

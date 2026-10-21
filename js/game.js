@@ -40,6 +40,8 @@ function sfx(name) { if (window.SoundFX) SoundFX.play(name); }
 function easeOutBack(p) { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(p - 1, 3) + c1 * Math.pow(p - 1, 2); }
 function easeOutCubic(p) { return 1 - Math.pow(1 - p, 3); }
 
+const GRAVITY = { dirt: 300, debris: 420, confettiBurst: 260, drop: 400, star: 120 };
+
 // 每張地圖的環境粒子
 const AMBIENT = [
   { kind: 'petal', n: 14, icons: ['🌸', '🍃', '🦋'] },
@@ -625,6 +627,45 @@ class Game {
     requestAnimationFrame(this.loop);
   }
 
+  // 只影響畫面、不影響遊戲結果的動畫（用真實時間）
+  updateCosmetic(dt) {
+    this.rt += dt;
+    if (this.banner) { this.banner.t += dt; if (this.banner.t > this.banner.dur) this.banner = null; }
+    this.baseShake = Math.max(0, this.baseShake - dt);
+    const amb = AMBIENT[this.chapter];
+    for (const a of this.ambient) {
+      a.x += a.vx * dt; a.y += a.vy * dt; a.ph += dt;
+      if (a.kind === 'petal' || a.kind === 'leaf') a.x += Math.sin(a.ph * 1.5) * 20 * dt;
+      if (a.x < -30 || a.x > WIDTH + 30 || a.y < -30 || a.y > HEIGHT + 30 || (a.life && a.ph > a.life)) Object.assign(a, this.newAmbient(amb, false));
+    }
+    for (const c of this.clouds) { c.x += 12 * dt; if (c.x > WIDTH + 200) c.x = -200; }
+  }
+  newAmbient(amb, anywhere) {
+    const a = { kind: amb.kind, ph: Math.random() * 6, life: 0 };
+    switch (amb.kind) {
+      case 'petal': case 'leaf':
+        a.icon = amb.icons[Math.floor(Math.random() * amb.icons.length)];
+        a.x = anywhere ? Math.random() * WIDTH : -20; a.y = Math.random() * HEIGHT;
+        a.vx = 20 + Math.random() * 25; a.vy = amb.kind === 'leaf' ? 10 + Math.random() * 15 : (Math.random() - 0.5) * 10;
+        a.size = a.icon === '🦋' ? 16 : 12;
+        break;
+      case 'snow':
+        a.x = Math.random() * WIDTH; a.y = anywhere ? Math.random() * HEIGHT : -10;
+        a.vx = -8 + Math.random() * 6; a.vy = 20 + Math.random() * 30; a.size = 1.5 + Math.random() * 2.5;
+        break;
+      case 'sand':
+        a.x = anywhere ? Math.random() * WIDTH : -20; a.y = Math.random() * HEIGHT;
+        a.vx = 80 + Math.random() * 80; a.vy = (Math.random() - 0.5) * 10; a.size = 1 + Math.random() * 1.5;
+        break;
+      case 'ember':
+        a.x = Math.random() * WIDTH; a.y = anywhere ? Math.random() * HEIGHT : HEIGHT + 10;
+        a.vx = (Math.random() - 0.5) * 15; a.vy = -(20 + Math.random() * 40); a.size = 1.5 + Math.random() * 2;
+        a.life = 3 + Math.random() * 6;
+        break;
+    }
+    return a;
+  }
+
   update(dt) {
     this.t += dt;
     if (this.waveActive) this.spawnStep(dt);
@@ -679,6 +720,7 @@ class Game {
   updateEnemy(e, dt) {
     const t = this.t;
     e.flash = Math.max(0, e.flash - dt);
+    e.squash = Math.max(0, e.squash - dt);
     if (e.burnUntil > t) this.damage(e, e.burnDps * dt, { dot: true });
     if (e.poisonUntil > t && !e.dead) this.damage(e, e.poisonDps * dt, { dot: true });
     if (e.dead) return;
@@ -736,18 +778,27 @@ class Game {
     switch (e.def.skill) {
       case 'stomp': {
         say('踩踏！');
+        sfx('stomp');
         this.shake = 0.35;
+        this.burst(e.x, e.y + 20, 12, 'dust');
         this.effects.push({ type: 'shock', x: e.x, y: e.y, r: 2.2 * TILE, t: 0, dur: 0.6 });
         for (const tw of this.towers) if (hypot(tw.x, tw.y, e.x, e.y) <= 2.2 * TILE) tw.stunUntil = t + 2.5;
         break;
       }
       case 'roar':
         say('吼——！');
+        sfx('roar');
+        this.shake = 0.3;
         this.effects.push({ type: 'shock', x: e.x, y: e.y, r: 5 * TILE, t: 0, dur: 0.8, color: '#ffcc55' });
         for (const o of this.enemies) o.roarUntil = t + 3;
         break;
       case 'dive':
         say('潛水！');
+        sfx('splash');
+        for (let i = 0; i < 10; i++) {
+          const a = Math.PI + Math.random() * Math.PI, s = 60 + Math.random() * 80;
+          this.effects.push({ type: 'drop', x: e.x, y: e.y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, t: 0, dur: 0.6 });
+        }
         e.diveUntil = t + 2;
         break;
       case 'rock': {
@@ -755,11 +806,18 @@ class Game {
         if (!cand.length) { e.skillT = 2; return; }
         const tw = cand[Math.floor(Math.random() * cand.length)];
         say('丟石頭！');
+        sfx('throw');
         this.projectiles.push({ kind: 'rock', sx: e.x, sy: e.y - 20, tx: tw.x, ty: tw.y, tower: tw, t: 0, dur: 1.0 });
         break;
       }
       case 'fire':
         say('烈焰咆哮！');
+        sfx('fireRoar');
+        this.shake = 0.3;
+        for (let i = 0; i < 24; i++) {
+          const a = Math.random() * Math.PI * 2, s = 80 + Math.random() * 100;
+          this.effects.push({ type: 'flame', x: e.x, y: e.y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, t: 0, dur: 0.7 });
+        }
         this.effects.push({ type: 'shock', x: e.x, y: e.y, r: 3 * TILE, t: 0, dur: 0.7, color: '#ff7a2f' });
         for (const o of this.enemies) { o.slowUntil = 0; o.frozenUntil = 0; o.heldUntil = 0; }
         for (const tw of this.towers) if (hypot(tw.x, tw.y, e.x, e.y) <= 2 * TILE) tw.stunUntil = t + 1.5;
@@ -811,6 +869,7 @@ class Game {
           const m = muzzle();
           this.projectiles.push({ kind: 'bullet', x: m.x, y: m.y, target: tg, spd: 14 * TILE, dmg, pierce: s.pierce, color: s.projColor });
           tw.flash = 0.05;
+          sfx('mg');
         }
         break;
       }
@@ -826,6 +885,8 @@ class Game {
             this.projectiles.push({ kind: 'pellet', x: m.x, y: m.y, vx: Math.cos(a) * spd, vy: Math.sin(a) * spd, life: R * 1.1 / spd, dmg, knock: (s.knock || 0) * TILE, air: s.air });
           }
           tw.flash = 0.1;
+          this.burst(m.x, m.y, 3, 'smokePuff');
+          sfx('shotgun');
         }
         break;
       }
@@ -835,7 +896,9 @@ class Game {
         const list = this.inRange(tw.x, tw.y, R, s.air);
         if (!list.length) { tw.pulse = 0; break; }
         tw.pulse = 0.5;
+        tw.flash = 0.12;
         this.effects.push({ type: 'ring', x: tw.x, y: tw.y, r: R, color: s.color, t: 0, dur: 0.5, faint: true });
+        if (s.freezeChance) sfx('freeze'); else if (s.poisonDps) sfx('poison');
         for (const e of list) {
           if (dmg) this.damage(e, dmg * 0.5, { pierce: true });
           if (e.dead) continue;
@@ -854,7 +917,7 @@ class Game {
         let tg = tw.target;
         if (!tg || !this.targetable(tg, s) || hypot(tg.x, tg.y, tw.x, tw.y) > R + tg.r * 0.5) {
           tg = this.acquire(tw, R);
-          if (tg !== tw.target) tw.beamT = 0;
+          if (tg !== tw.target) { tw.beamT = 0; if (tg) sfx('laser'); }
           tw.target = tg;
         }
         if (!tg) break;
@@ -878,6 +941,7 @@ class Game {
           this.damage(e, dmg);
           if (s.poisonDps && !e.dead) this.addPoison(e, s.poisonDps * tw.dmgMult, s.poisonDur);
           tw.flash = 0.12;
+          sfx('spike');
           tw.uses--;
           if (tw.uses <= 0) {
             tw.dead = true;
@@ -897,6 +961,8 @@ class Game {
           const p = this.map.posAt(tg.dist + tg.curSpeed * TILE * fl * 0.85);
           this.projectiles.push({ kind: 'shell', sx: tw.x, sy: tw.y, tx: p.x, ty: p.y, t: 0, dur: fl, dmg, splash: s.splash * TILE, burnDps: (s.burnDps || 0) * tw.dmgMult, burnDur: s.burnDur });
           tw.flash = 0.12;
+          this.burst(tw.x, tw.y - 8, 3, 'smokePuff');
+          sfx('mortar');
         }
         break;
       }
@@ -912,6 +978,7 @@ class Game {
           this.effects.push({ type: 'line', x: m.x, y: m.y, x2: tg.x, y2: tg.y, color: crit ? '#ff4d4d' : '#ffffff', t: 0, dur: 0.15 });
           if (crit) this.effects.push({ type: 'text', x: tg.x, y: tg.y - 24, text: '暴擊！', color: '#ff4d4d', t: 0, dur: 0.8 });
           tw.flash = 0.1;
+          sfx('sniper');
         }
         break;
       }
@@ -936,6 +1003,7 @@ class Game {
             const m = muzzle();
             this.effects.push({ type: 'flame', x: m.x, y: m.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, t: 0, dur: 0.55 });
           }
+          sfx('flame');
         }
         break;
       }
@@ -965,6 +1033,7 @@ class Game {
         }
         this.effects.push({ type: 'bolt', pts, t: 0, dur: 0.2 });
         tw.flash = 0.15;
+        sfx('zap');
         break;
       }
       case 'missile': {
@@ -985,6 +1054,7 @@ class Game {
           this.projectiles.push({ kind: 'missile', x: tw.x, y: tw.y, vx: Math.cos(a) * 140, vy: Math.sin(a) * 140, target: tg, spd: 7 * TILE, dmg, airMult: s.airMult, splash: s.splash * TILE, life: 3 });
         }
         tw.flash = 0.15;
+        sfx('missile');
         break;
       }
       case 'wind': {
@@ -993,6 +1063,8 @@ class Game {
         if (!tg) break;
         aim(tg);
         tw.cd = 1 / rate;
+        tw.flash = 0.2;
+        sfx('wind');
         const list = s.all ? this.inRange(tw.x, tw.y, R, true).filter(e => this.targetable(e, s)) : [tg];
         for (const e of list) {
           this.damage(e, dmg);
@@ -1009,6 +1081,8 @@ class Game {
         aim(tg);
         tw.cd = s.cd / tw.rateMult;
         this.fields.push({ x: tg.x, y: tg.y, r: s.radius * TILE, until: t + s.hold, dps: dmg, t: 0 });
+        tw.flash = 0.3;
+        sfx('blackhole');
         break;
       }
     }
@@ -1038,6 +1112,9 @@ class Game {
       if (o.burnDps && !e.dead) this.addBurn(e, o.burnDps, o.burnDur);
     }
     this.effects.push({ type: 'boom', x, y, r, t: 0, dur: 0.4, fire: !!o.burnDps });
+    this.effects.push({ type: 'shock', x, y, r: r * 1.3, t: 0, dur: 0.3, color: 'rgba(255,240,200,0.9)' });
+    this.burst(x, y, 4, 'debris');
+    sfx('boom');
   }
 
   updateProjectiles(dt) {
@@ -1108,6 +1185,8 @@ class Game {
               tw.dead = true;
               this.shake = 0.3;
               this.effects.push({ type: 'boom', x: tw.x, y: tw.y, r: 36, t: 0, dur: 0.5 });
+              this.burst(tw.x, tw.y, 14, 'debris');
+              sfx('boom');
               this.hooks.toast(`🦍 金剛砸毀了你的 ${tw.def.icon}${tw.def.name}！`, 'warn');
             }
           }
@@ -1131,7 +1210,12 @@ class Game {
   updateEffects(dt) {
     for (const f of this.effects) {
       f.t += dt;
-      if (f.vx !== undefined) { f.x += f.vx * dt; f.y += f.vy * dt; if (f.type === 'dirt') f.vy += 300 * dt; }
+      if (f.t < 0 || f.vx === undefined) continue;
+      f.x += f.vx * dt; f.y += f.vy * dt;
+      const g = GRAVITY[f.type];
+      if (g) f.vy += g * dt;
+      if (f.type === 'dust' || f.type === 'smokePuff') { f.vx *= 1 - 3 * dt; f.vy *= 1 - 3 * dt; }
+      if (f.type === 'confetti') f.x += Math.sin(f.t * 4 + f.rot) * 30 * dt;
     }
     this.effects = this.effects.filter(f => f.t < f.dur);
     this.shake = Math.max(0, this.shake - dt);
@@ -1165,10 +1249,99 @@ class Game {
     trace(); c.strokeStyle = th.edge; c.lineWidth = TILE * 0.9; c.stroke();
     trace(); c.strokeStyle = th.path; c.lineWidth = TILE * 0.72; c.stroke();
     trace(); c.setLineDash([3, 16]); c.strokeStyle = 'rgba(255,255,255,0.45)'; c.lineWidth = 4; c.stroke(); c.setLineDash([]);
-    for (const d of this.map.decor) drawEmoji(c, d.icon, (d.gx + 0.5) * TILE, (d.gy + 0.5) * TILE, 30);
-    drawEmoji(c, '🚩', this.map.entry.x, this.map.entry.y - 4, 24);
-    drawEmoji(c, '🏡', this.map.base.x, this.map.base.y - 4, 42);
+    for (const d of this.map.decor) {
+      c.fillStyle = 'rgba(0,0,0,0.13)';
+      c.beginPath(); c.ellipse((d.gx + 0.5) * TILE, (d.gy + 0.5) * TILE + 13, 14, 5, 0, 0, Math.PI * 2); c.fill();
+    }
     return cv;
+  }
+
+  // 會動的場景：搖擺的裝飾、旗子、農場
+  drawScenery() {
+    const c = this.ctx, rt = this.rt;
+    this.map.decor.forEach((d, i) => {
+      const sway = Math.sin(rt * 1.6 + i * 1.7) * 0.06;
+      // 以底部為軸心搖擺
+      const x = (d.gx + 0.5) * TILE, y = (d.gy + 0.5) * TILE + 12;
+      c.save(); c.translate(x, y); c.rotate(sway);
+      drawEmoji(c, d.icon, 0, -12, 30);
+      c.restore();
+    });
+    const en = this.map.entry;
+    c.save(); c.translate(en.x - 6, en.y + 8); c.rotate(Math.sin(rt * 4) * 0.12);
+    drawEmoji(c, '🚩', 6, -12, 24);
+    c.restore();
+    const b = this.map.base;
+    const sh = this.baseShake > 0 ? (Math.random() - 0.5) * 8 * Math.min(1, this.baseShake * 2) : 0;
+    const breathe = 1 + Math.sin(rt * 2) * 0.03;
+    const hpRatio = this.hp / this.maxHp;
+    drawEmoji(c, this.defeated ? '🏚️' : '🏡', b.x + sh, b.y - 4, 42, false, 1, 0, 1 / breathe, breathe);
+    if (!this.defeated && hpRatio < 0.35) drawEmoji(c, '💨', b.x + 14, b.y - 28 - (rt * 20 % 10), 16, false, 0.7);
+  }
+
+  drawAmbient() {
+    const c = this.ctx;
+    for (const cl of this.clouds) {
+      c.fillStyle = 'rgba(0,0,0,0.06)';
+      c.beginPath();
+      c.ellipse(cl.x, cl.y, 110 * cl.s, 40 * cl.s, 0, 0, Math.PI * 2);
+      c.ellipse(cl.x + 70 * cl.s, cl.y + 10, 70 * cl.s, 30 * cl.s, 0, 0, Math.PI * 2);
+      c.fill();
+    }
+    for (const a of this.ambient) {
+      switch (a.kind) {
+        case 'petal': case 'leaf':
+          drawEmoji(c, a.icon, a.x, a.y, a.size, a.icon === '🦋' && Math.sin(a.ph * 3) > 0, 0.85, Math.sin(a.ph * 2) * 0.6, a.icon === '🦋' ? Math.abs(Math.sin(a.ph * 12)) * 0.7 + 0.3 : 1);
+          break;
+        case 'snow':
+          c.fillStyle = 'rgba(255,255,255,0.9)';
+          c.beginPath(); c.arc(a.x + Math.sin(a.ph * 2) * 6, a.y, a.size, 0, Math.PI * 2); c.fill();
+          break;
+        case 'sand':
+          c.fillStyle = 'rgba(200,160,90,0.45)';
+          c.fillRect(a.x, a.y, a.size * 6, a.size);
+          break;
+        case 'ember': {
+          const f = a.life ? 1 - a.ph / a.life : 1;
+          c.fillStyle = `rgba(255,${120 + Math.floor(Math.sin(a.ph * 8) * 60)},40,${Math.max(0, f)})`;
+          c.beginPath(); c.arc(a.x + Math.sin(a.ph * 3) * 5, a.y, a.size, 0, Math.PI * 2); c.fill();
+          break;
+        }
+      }
+    }
+  }
+
+  drawBanner() {
+    const b = this.banner;
+    if (!b) return;
+    const c = this.ctx, p = b.t / b.dur;
+    // 從左滑入 → 停留 → 往右滑出
+    let x;
+    if (b.t < 0.35) x = -WIDTH * (1 - easeOutBack(b.t / 0.35));
+    else if (b.t > b.dur - 0.3) x = WIDTH * easeOutCubic((b.t - (b.dur - 0.3)) / 0.3);
+    else x = 0;
+    const alpha = Math.min(1, b.t * 6, (b.dur - b.t) * 4);
+    const y = HEIGHT / 2;
+    c.save();
+    c.globalAlpha = Math.max(0, alpha) * 0.55;
+    c.fillStyle = '#000';
+    c.fillRect(0, y - 52, WIDTH, 104);
+    c.globalAlpha = Math.max(0, alpha);
+    c.translate(x + WIDTH / 2, y);
+    c.fillStyle = b.color;
+    c.fillRect(-WIDTH / 2, -44, WIDTH, 4);
+    c.fillRect(-WIDTH / 2, 40, WIDTH, 4);
+    const scale = 1 + Math.sin(p * Math.PI * 6) * 0.015;
+    c.scale(scale, scale);
+    c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.font = `900 46px "Noto Sans TC","Microsoft JhengHei",sans-serif`;
+    c.lineWidth = 8; c.strokeStyle = 'rgba(40,20,10,0.9)';
+    c.strokeText(b.text, 0, -10);
+    c.fillStyle = b.color; c.fillText(b.text, 0, -10);
+    c.font = `700 20px "Noto Sans TC","Microsoft JhengHei",${EMOJI_FONT}`;
+    c.lineWidth = 5; c.strokeText(b.sub, 0, 26);
+    c.fillStyle = '#fff'; c.fillText(b.sub, 0, 26);
+    c.restore();
   }
 
   render() {
@@ -1187,6 +1360,7 @@ class Game {
       c.fillStyle = 'rgba(20,10,5,0.7)';
       c.beginPath(); c.ellipse(p.x, p.y + 1, 11, 6, 0, 0, Math.PI * 2); c.fill();
     }
+    this.drawScenery();
 
     // 放置預覽
     const m = this.mouse;
@@ -1214,6 +1388,7 @@ class Game {
     for (const e of this.enemies) if (e.air) this.drawEnemy(e);
     for (const p of this.projectiles) this.drawProjectile(p);
     for (const f of this.effects) this.drawEffect(f);
+    this.drawAmbient();
 
     // 空襲瞄準
     if (this.targeting && m) {
@@ -1225,6 +1400,11 @@ class Game {
     c.restore();
 
     this.drawBossBars();
+    if (this.defeated) {
+      c.fillStyle = 'rgba(40,30,30,0.35)';
+      c.fillRect(0, 0, WIDTH, HEIGHT);
+    }
+    this.drawBanner();
     if (this.hurtFlash > 0) {
       c.fillStyle = `rgba(255,0,0,${this.hurtFlash * 0.5})`;
       c.fillRect(0, 0, WIDTH, HEIGHT);
@@ -1267,6 +1447,14 @@ class Game {
 
   drawTower(tw) {
     const c = this.ctx, x = tw.x, y = tw.y, def = tw.def, s = tw.s, t = this.t;
+    // 放置時彈出、升級時跳一下、開火時壓扁
+    const age = this.rt - tw.born, up = this.rt - tw.upT;
+    let sc = age < 0.4 ? Math.max(0.01, easeOutBack(age / 0.4)) : 1;
+    if (up < 0.4) sc *= 1 + Math.sin(up / 0.4 * Math.PI) * 0.25;
+    const k = Math.min(1, tw.flash * 8);
+    const sx = sc * (1 + k * 0.08), sy = sc * (1 - k * 0.08);
+    c.save();
+    c.translate(x, y + 18); c.scale(sx, sy); c.translate(-x, -(y + 18));
     c.fillStyle = 'rgba(0,0,0,0.2)';
     c.beginPath(); c.ellipse(x + 2, y + 17, 19, 6, 0, 0, Math.PI * 2); c.fill();
     const g = c.createLinearGradient(x, y - 20, x, y + 20);
@@ -1314,6 +1502,13 @@ class Game {
     }
     if (tw.buffed) { c.fillStyle = '#5dff8a'; c.font = 'bold 11px sans-serif'; c.textAlign = 'center'; c.fillText('▲', x - 15, y - 14); }
     if (tw.stunUntil > t) drawEmoji(c, '💫', x, y - 24, 18, false, 1, t * 4);
+    if (s.kind === 'mine') {
+      // 金礦閃光
+      const gl = (this.rt * 0.7 + tw.id * 0.37) % 1;
+      if (gl < 0.15) drawEmoji(c, '✨', x + 10, y - 10, 12, false, 1 - gl / 0.15);
+    }
+    if (s.kind === 'heal') drawEmoji(c, '💗', x, y - 22 - (this.rt * 12 % 12), 10, false, 1 - (this.rt * 12 % 12) / 12);
+    c.restore();
     if (tw === this.selected) { c.strokeStyle = '#ffffff'; c.lineWidth = 2.5; rrect(c, x - 22, y - 22, 44, 44, 13); c.stroke(); }
   }
 
@@ -1360,8 +1555,21 @@ class Game {
       c.fillStyle = e.boss ? 'rgba(200,60,255,0.18)' : 'rgba(255,60,60,0.18)';
       c.beginPath(); c.arc(x, y - lift, size * 0.6 + Math.sin(t * 5) * 2, 0, Math.PI * 2); c.fill();
     }
-    const ey = y - bob - lift;
-    drawEmoji(c, e.def.icon, x, ey, size, e.face > 0, alpha);
+    // 出場彈出 / 突襲 BOSS 從地底升起、走路搖擺、被打壓扁
+    const age = this.rt - e.born;
+    let pop = 1, riseOff = 0;
+    if (e.rise && age < 0.7) { riseOff = (1 - easeOutBack(age / 0.7)) * size * 0.9; alpha *= Math.min(1, age * 3); }
+    else if (age < 0.3) pop = Math.max(0.05, easeOutBack(age / 0.3));
+    const ey = y - bob - lift + riseOff;
+    const sq = e.squash / 0.15;
+    const waddle = e.curSpeed > 0 && !e.air ? Math.sin(e.walk * 9) * 0.09 : 0;
+    drawEmoji(c, e.def.icon, x, ey, size * pop, e.face > 0, alpha, waddle, 1 + sq * 0.18, 1 - sq * 0.18);
+    if (e.air) {
+      // 飛行動物的翅膀風
+      c.strokeStyle = 'rgba(255,255,255,0.5)'; c.lineWidth = 1.5;
+      const wf = Math.sin(e.walk * 20) * 4;
+      c.beginPath(); c.moveTo(x - size * 0.5, ey + wf); c.lineTo(x - size * 0.7, ey + wf - 3); c.moveTo(x + size * 0.5, ey + wf); c.lineTo(x + size * 0.7, ey + wf - 3); c.stroke();
+    }
     if (e.flash > 0) {
       c.fillStyle = 'rgba(255,255,255,0.45)';
       c.beginPath(); c.arc(x, ey, size * 0.42, 0, Math.PI * 2); c.fill();
@@ -1410,6 +1618,10 @@ class Game {
     const c = this.ctx;
     switch (p.kind) {
       case 'bullet':
+        if (p.a !== undefined) {
+          c.strokeStyle = 'rgba(255,230,120,0.5)'; c.lineWidth = 2;
+          c.beginPath(); c.moveTo(p.x, p.y); c.lineTo(p.x - Math.cos(p.a) * 12, p.y - Math.sin(p.a) * 12); c.stroke();
+        }
         c.fillStyle = p.color; c.beginPath(); c.arc(p.x, p.y, 3, 0, Math.PI * 2); c.fill();
         break;
       case 'pellet':
@@ -1544,6 +1756,59 @@ class Game {
         }
         c.stroke();
         drawEmoji(c, '⚠️', f.x, f.y - 34, 22 + pulse * 4);
+        break;
+      }
+      case 'dust':
+        c.fillStyle = `rgba(150,120,80,${0.5 * (1 - p)})`;
+        c.beginPath(); c.arc(f.x, f.y, 3 + p * 6, 0, Math.PI * 2); c.fill();
+        break;
+      case 'smokePuff':
+        c.fillStyle = `rgba(230,230,230,${0.6 * (1 - p)})`;
+        c.beginPath(); c.arc(f.x, f.y, 3 + p * 8, 0, Math.PI * 2); c.fill();
+        break;
+      case 'puff':
+        c.fillStyle = `rgba(255,255,255,${0.7 * (1 - p)})`;
+        for (let i = 0; i < 5; i++) {
+          const a = i * 1.256;
+          c.beginPath(); c.arc(f.x + Math.cos(a) * f.r * p * 1.5, f.y + Math.sin(a) * f.r * p * 1.5, f.r * 0.5 * (1 - p * 0.5), 0, Math.PI * 2); c.fill();
+        }
+        break;
+      case 'star':
+        drawEmoji(c, '⭐', f.x, f.y, 10 * (1 - p * 0.5), false, 1 - p, f.rot + p * 6);
+        break;
+      case 'debris':
+        c.save(); c.translate(f.x, f.y); c.rotate(f.rot + p * 10);
+        c.fillStyle = `rgba(110,80,50,${1 - p})`; c.fillRect(-3, -2, 6, 4);
+        c.restore();
+        break;
+      case 'confetti': case 'confettiBurst':
+        c.save(); c.translate(f.x, f.y); c.rotate(f.rot + f.t * 6);
+        c.fillStyle = `hsla(${f.hue},85%,60%,${Math.min(1, (1 - p) * 3)})`;
+        c.fillRect(-4, -2, 8, 4 * Math.abs(Math.cos(f.t * 8)) + 0.5);
+        c.restore();
+        break;
+      case 'coin': {
+        const e = easeOutCubic(p), tx = 150, ty = -20;
+        const x = f.sx + (tx - f.sx) * e, y = f.sy + (ty - f.sy) * e - Math.sin(p * Math.PI) * f.arc;
+        drawEmoji(c, '🪙', x, y, 14, false, p > 0.85 ? (1 - p) / 0.15 : 1, 0, Math.abs(Math.cos(f.t * 10)) * 0.8 + 0.2, 1);
+        break;
+      }
+      case 'heart':
+        drawEmoji(c, '❤️', f.x + Math.sin(f.t * 6) * 6, f.y - p * 50, 14 * (0.6 + p * 0.6), false, 1 - p);
+        break;
+      case 'flake':
+        drawEmoji(c, '❄️', f.x, f.y + p * 20, 14, false, Math.sin(p * Math.PI), p * 3);
+        break;
+      case 'drop':
+        c.fillStyle = `rgba(120,200,255,${1 - p})`;
+        c.beginPath(); c.arc(f.x, f.y, 3, 0, Math.PI * 2); c.fill();
+        break;
+      case 'beamup': {
+        const g = c.createLinearGradient(f.x, f.y - 80, f.x, f.y + 20);
+        g.addColorStop(0, 'rgba(255,230,100,0)');
+        g.addColorStop(1, `rgba(255,230,100,${0.6 * (1 - p)})`);
+        c.fillStyle = g;
+        c.fillRect(f.x - 20 * (1 - p * 0.5), f.y - 80, 40 * (1 - p * 0.5), 100);
         break;
       }
       case 'screen':

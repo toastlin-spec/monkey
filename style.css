@@ -194,6 +194,27 @@ h1 { font-size: 44px; font-weight: 900; margin: 4px 0; color: var(--primary-dark
 .skill.active { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary); }
 .skill:disabled { cursor: not-allowed; }
 
+/* ---------- 介面動畫 ---------- */
+.gold-bump { animation: goldbump .35s ease-out; }
+@keyframes goldbump { 40% { transform: scale(1.12); background: #fff3b0; } }
+.btn.icon.off { opacity: .55; background: #eee5d8; }
+.skill.ready { animation: ready .6s ease-out; }
+@keyframes ready { 0% { box-shadow: 0 0 0 0 rgba(255,184,0,.9); transform: scale(1.12); } 100% { box-shadow: 0 0 0 14px rgba(255,184,0,0); } }
+.shop-item .new { animation: wiggle 1s ease-in-out infinite; }
+@keyframes wiggle { 0%,100% { transform: rotate(-8deg); } 50% { transform: rotate(8deg) scale(1.15); } }
+.shop-item.active .si-icon { animation: bounce .8s ease-in-out infinite; }
+.wave-btn:not(:disabled) { animation: breathe 1.6s ease-in-out infinite; }
+@keyframes breathe { 50% { transform: scale(1.04); box-shadow: 0 4px 0 rgba(120,80,40,.18), 0 0 0 6px rgba(255,138,61,.25); } }
+.screen.active { animation: fadein .3s ease-out; }
+@keyframes fadein { from { opacity: 0; } }
+.chapter:not(.locked):hover canvas { filter: saturate(1.25) brightness(1.05); }
+.talent .btn:not(:disabled):active { animation: pop .2s; }
+.modal-card .big-emoji { animation: bounce 1.2s ease-in-out infinite; display: inline-block; }
+.sliders { display: flex; flex-direction: column; gap: 10px; margin: 12px 0; text-align: left; }
+.slider-row { display: grid; grid-template-columns: 110px 1fr 36px; align-items: center; gap: 10px; font-weight: 700; }
+.slider-row input { accent-color: var(--primary); width: 100%; }
+.slider-row b { text-align: right; }
+
 /* ---------- 對話框 ---------- */
 .modal { position: absolute; inset: 0; background: rgba(50,30,15,.45); display: flex; align-items: center;
   justify-content: center; z-index: 10; padding: 16px; }

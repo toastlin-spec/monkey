@@ -43,13 +43,61 @@ const Save = {
 let game = null;
 function show(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === id));
+  if (id !== 'game') Music.play('menu');
   if (id === 'menu') $('menu-stars').textContent = `⭐ ${Save.freeStars()}`;
   if (id === 'chapters') renderChapters();
   if (id === 'talents') renderTalents();
 }
 document.querySelectorAll('[data-goto]').forEach(b => b.addEventListener('click', () => show(b.dataset.goto)));
-// 點按鈕後取消焦點，避免空白鍵重複觸發
-document.addEventListener('click', e => { const b = e.target.closest('button'); if (b) b.blur(); });
+// 點按鈕後取消焦點，避免空白鍵重複觸發；順便播放點擊音效
+document.addEventListener('click', e => {
+  const b = e.target.closest('button, .shop-item, .chapter');
+  if (!b) return;
+  if (b.blur) b.blur();
+  if (!b.disabled) SoundFX.play('click');
+});
+
+// ---------- 音量 ----------
+const lastVol = { music: SoundFX.settings.music || 0.5, sfx: SoundFX.settings.sfx || 0.7 };
+function toggleVolume(kind) {
+  const v = SoundFX.settings[kind];
+  if (v > 0) { lastVol[kind] = v; SoundFX.setVolume(kind, 0); }
+  else SoundFX.setVolume(kind, lastVol[kind] || 0.5);
+  updateAudioButtons();
+}
+function updateAudioButtons() {
+  $('btn-music').textContent = SoundFX.settings.music > 0 ? '🎵' : '🔇';
+  $('btn-music').classList.toggle('off', SoundFX.settings.music <= 0);
+  $('btn-sfx').textContent = SoundFX.settings.sfx > 0 ? '🔊' : '🔈';
+  $('btn-sfx').classList.toggle('off', SoundFX.settings.sfx <= 0);
+}
+$('btn-music').addEventListener('click', () => toggleVolume('music'));
+$('btn-sfx').addEventListener('click', () => toggleVolume('sfx'));
+function audioSliders() {
+  const row = (kind, label) => `
+    <label class="slider-row"><span>${label}</span>
+      <input type="range" min="0" max="100" value="${Math.round(SoundFX.settings[kind] * 100)}" data-vol="${kind}">
+      <b>${Math.round(SoundFX.settings[kind] * 100)}</b></label>`;
+  return `<div class="sliders">${row('music', '🎵 背景音樂')}${row('sfx', '🔊 音效')}</div>`;
+}
+function bindSliders(card) {
+  card.querySelectorAll('[data-vol]').forEach(inp => inp.addEventListener('input', () => {
+    const v = +inp.value / 100;
+    SoundFX.setVolume(inp.dataset.vol, v);
+    if (v > 0) lastVol[inp.dataset.vol] = v;
+    inp.nextElementSibling.textContent = inp.value;
+    if (inp.dataset.vol === 'sfx') SoundFX.play('coin');
+    updateAudioButtons();
+  }));
+}
+function showAudioSettings() {
+  const card = openModal(`<div class="big-emoji">🔊</div><h2>音量設定</h2>${audioSliders()}
+    <div class="btns"><button class="btn primary" id="m-close">完成</button></div>`);
+  bindSliders(card);
+  card.querySelector('#m-close').addEventListener('click', closeModal);
+}
+$('btn-audio').addEventListener('click', showAudioSettings);
+updateAudioButtons();
 
 function openModal(html, cls = '') {
   const card = $('modal-card');
@@ -159,6 +207,7 @@ function showHelp() {
 // ---------- 遊戲 ----------
 const hooks = {
   toast, hud: () => UI.refresh(true),
+  bossMusic(on) { if (game) Music.play(on ? 'boss' : 'map' + game.chapter); },
   hurt() { const el = $('hud-hp').parentElement; el.classList.remove('hp-flash'); void el.offsetWidth; el.classList.add('hp-flash'); },
   waveDone(info) {
     Save.recordStars(info.level, info.stars);
@@ -168,6 +217,7 @@ const hooks = {
     toast(msg, 'good');
   },
   victory() {
+    Music.stop();
     const ch = game.chapter;
     if (Save.data.unlocked < ch + 2) { Save.data.unlocked = Math.min(MAPS.length, ch + 2); Save.save(); }
     const final = ch === MAPS.length - 1;
@@ -186,6 +236,7 @@ const hooks = {
     card.querySelector('#m-menu').addEventListener('click', () => { closeModal(); endGame(); show('menu'); });
   },
   defeat() {
+    Music.stop();
     const card = openModal(`
       <div class="big-emoji">😵</div>
       <h2>農場被攻陷了…</h2>
@@ -208,6 +259,8 @@ function startGame(ch) {
   game = new Game($('board'), ch, { hooks, talents: Save.talentValues() });
   game.autoNext = $('chk-auto').checked;
   setSpeed(1);
+  Music.play('map' + ch);
+  SoundFX.setDuck(false);
   $('hud-map').textContent = `${MAPS[ch].icon} ${MAPS[ch].name}`;
   $('toasts').innerHTML = '';
   UI.build();
@@ -230,22 +283,25 @@ $('btn-pause').addEventListener('click', pauseGame);
 function pauseGame() {
   if (!game || game.over) return;
   game.paused = true;
+  SoundFX.setDuck(true);
   const card = openModal(`
     <div class="big-emoji">⏸️</div><h2>暫停中</h2>
+    ${audioSliders()}
     <div class="btns">
       <button class="btn primary" id="m-resume">▶ 繼續遊戲</button>
       <button class="btn" id="m-help">📖 遊戲說明</button>
       <button class="btn" id="m-retry">🔄 重新開始本章</button>
       <button class="btn red" id="m-menu">離開到主選單</button>
     </div>`);
-  const resume = () => { closeModal(); if (game) game.paused = false; };
+  bindSliders(card);
+  const resume = () => { closeModal(); SoundFX.setDuck(false); if (game) game.paused = false; };
   card.querySelector('#m-resume').addEventListener('click', resume);
   card.querySelector('#m-help').addEventListener('click', () => {
     showHelp();
-    $('m-close').addEventListener('click', () => { if (game) game.paused = false; });
+    $('m-close').addEventListener('click', () => { SoundFX.setDuck(false); if (game) game.paused = false; });
   });
   card.querySelector('#m-retry').addEventListener('click', () => { closeModal(); startGame(game.chapter); });
-  card.querySelector('#m-menu').addEventListener('click', () => { closeModal(); endGame(); show('menu'); });
+  card.querySelector('#m-menu').addEventListener('click', () => { closeModal(); SoundFX.setDuck(false); endGame(); show('menu'); });
 }
 window.addEventListener('keydown', e => {
   if (e.key === 'p' || e.key === 'P') {
@@ -276,6 +332,13 @@ function toast(msg, type = '') {
   box.appendChild(el);
   while (box.children.length > 4) box.firstChild.remove();
   setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 450); }, type === 'boss' ? 4500 : 3200);
+}
+
+// 重新觸發一次 CSS 動畫
+function bump(el, cls) {
+  el.classList.remove(cls);
+  void el.offsetWidth;
+  el.classList.add(cls);
 }
 
 // ---------- 遊戲內介面 ----------
@@ -348,6 +411,7 @@ const UI = {
       sk.appendChild(b);
     }
     this.key = '';
+    this.prevGold = undefined;
     this.refresh(true);
   },
 
@@ -356,7 +420,10 @@ const UI = {
     if (!g) return;
     $('hud-level').textContent = g.level;
     $('hud-hp').textContent = `${g.hp}/${g.maxHp}`;
-    $('hud-gold').textContent = Math.floor(g.gold);
+    const gold = Math.floor(g.gold);
+    if (this.prevGold !== undefined && gold > this.prevGold) bump($('hud-gold').parentElement, 'gold-bump');
+    this.prevGold = gold;
+    $('hud-gold').textContent = gold;
 
     for (const el of $('shop').children) {
       const k = el.dataset.type, d = TOWERS[k], un = g.isUnlocked(k);
@@ -375,6 +442,8 @@ const UI = {
       const left = Math.max(0, (g.skillCd[s.id] || 0) - g.t), total = s.cd * g.skillCdMul;
       b.querySelector('.sk-cd').style.height = left > 0 ? `${left / total * 100}%` : '0';
       b.querySelector('.sk-cdt').textContent = left > 0 ? Math.ceil(left) : '';
+      if (b.dataset.cooling === '1' && left <= 0) bump(b, 'ready');
+      b.dataset.cooling = left > 0 ? '1' : '0';
       b.disabled = g.over || left > 0 || g.gold < s.cost;
       b.classList.toggle('active', g.targeting === s.id);
     }
