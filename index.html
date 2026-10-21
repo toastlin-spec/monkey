@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>萌獸大進擊</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@500;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- 主選單 -->
+  <section id="menu" class="screen active">
+    <div class="menu-card">
+      <div class="logo">🐾</div>
+      <h1>萌獸大進擊</h1>
+      <p class="subtitle">可愛動物塔防 · 5 張地圖 · 50 關挑戰</p>
+      <div class="menu-btns">
+        <button id="btn-play" class="btn big primary">🎮 開始冒險</button>
+        <button id="btn-talent" class="btn big">⭐ 天賦升級 <span id="menu-stars" class="pill"></span></button>
+        <button id="btn-help" class="btn big">📖 遊戲說明</button>
+      </div>
+    </div>
+    <div class="parade"><span>🐰</span><span>🐭</span><span>🐗</span><span>🦅</span><span>🐆</span><span>🐸</span><span>🦘</span><span>🦏</span><span>🐹</span><span>🐒</span><span>🦎</span><span>🐘</span></div>
+  </section>
+
+  <!-- 章節選擇 -->
+  <section id="chapters" class="screen">
+    <div class="page-head">
+      <button class="btn back" data-goto="menu">← 返回</button>
+      <h2>選擇地圖</h2>
+      <span class="pill" id="chap-stars"></span>
+    </div>
+    <div id="chapter-list" class="chapter-list"></div>
+  </section>
+
+  <!-- 天賦 -->
+  <section id="talents" class="screen">
+    <div class="page-head">
+      <button class="btn back" data-goto="menu">← 返回</button>
+      <h2>天賦升級</h2>
+      <span class="pill" id="talent-stars"></span>
+    </div>
+    <p class="hint center">每過一關可得 ⭐1，沒有動物衝進農場再加 ⭐1（每關最多 ⭐2）。星星可以用來永久強化。</p>
+    <div id="talent-list" class="talent-list"></div>
+    <div class="center"><button id="btn-reset-talent" class="btn small ghost">重新分配天賦</button></div>
+  </section>
+
+  <!-- 遊戲畫面 -->
+  <section id="game" class="screen">
+    <header id="hud">
+      <div class="hud-item" title="目前關卡"><span>🚩</span><b id="hud-level">1</b><small>/ 50</small></div>
+      <div class="hud-item" title="農場血量"><span>❤️</span><b id="hud-hp">20</b></div>
+      <div class="hud-item gold" title="金幣"><span>💰</span><b id="hud-gold">0</b></div>
+      <div class="hud-item map" id="hud-map"></div>
+      <div class="spacer"></div>
+      <div class="seg" id="speed-btns">
+        <button data-speed="1" class="on">1×</button><button data-speed="2">2×</button><button data-speed="3">3×</button>
+      </div>
+      <button class="btn icon" id="btn-pause" title="暫停">⏸</button>
+    </header>
+    <div id="game-body">
+      <div id="board-wrap">
+        <canvas id="board"></canvas>
+        <div id="toasts"></div>
+      </div>
+      <aside id="side">
+        <div class="side-title">🛒 炮塔商店</div>
+        <div id="shop" class="shop"></div>
+        <div id="info" class="info"></div>
+      </aside>
+    </div>
+    <footer id="actionbar">
+      <button id="btn-wave" class="btn primary wave-btn">▶ 開始</button>
+      <label class="auto"><input type="checkbox" id="chk-auto"> 自動下一關</label>
+      <div class="spacer"></div>
+      <div id="skills" class="skills"></div>
+    </footer>
+  </section>
+
+  <div id="modal" class="modal hidden"><div class="modal-card" id="modal-card"></div></div>
+</div>
+
+<script src="js/data.js"></script>
+<script src="js/game.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
