@@ -6,7 +6,7 @@
 <title>萌獸大進擊</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@500;700;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=1.2.0">
 </head>
 <body>
 <div id="app">
@@ -23,6 +23,7 @@
         <button id="btn-help" class="btn big">📖 遊戲說明</button>
         <button id="btn-audio" class="btn big">🔊 音量設定</button>
       </div>
+      <p class="version">v1.2.0</p>
     </div>
     <div class="parade"><span>🐰</span><span>🐭</span><span>🐗</span><span>🦅</span><span>🐆</span><span>🐸</span><span>🦘</span><span>🦏</span><span>🐹</span><span>🐒</span><span>🦎</span><span>🐘</span></div>
   </section>
@@ -86,9 +87,10 @@
   <div id="modal" class="modal hidden"><div class="modal-card" id="modal-card"></div></div>
 </div>
 
-<script src="js/data.js"></script>
-<script src="js/audio.js"></script>
-<script src="js/game.js"></script>
-<script src="js/main.js"></script>
+<!-- ?v= 版本號：每次發新版一起改，手機就不會讀到舊快取 -->
+<script src="js/data.js?v=1.2.0"></script>
+<script src="js/audio.js?v=1.2.0"></script>
+<script src="js/game.js?v=1.2.0"></script>
+<script src="js/main.js?v=1.2.0"></script>
 </body>
 </html>

@@ -289,9 +289,9 @@ class Game {
     if (this.effects.length > 400) return;
     this.effects.push({ type: 'coin', sx: x, sy: y, x, y, t: -delay, dur: 0.7, arc: 40 + Math.random() * 60 });
   }
-  upgradeCostOf(tw) { return tw.lv >= 3 ? 0 : upgradeCost(tw.def, tw.lv); }
+  upgradeCostOf(tw) { return tw.lv >= MAX_LV ? 0 : upgradeCost(tw.def, tw.lv); }
   upgrade(tw, branch) {
-    if (tw.lv >= 3) return;
+    if (tw.lv >= MAX_LV) return;
     const c = this.upgradeCostOf(tw);
     if (this.gold < c) { this.hooks.toast('💸 金幣不夠！', 'warn'); sfx('deny'); return; }
     if (tw.lv === 2 && branch == null) return;
@@ -301,7 +301,9 @@ class Game {
     if (tw.lv === 3) tw.branch = branch;
     tw.s = computeStats(tw.def, tw.lv, tw.branch);
     if (tw.s.uses) tw.uses = tw.s.uses;
-    this.effects.push({ type: 'text', x: tw.x, y: tw.y - 20, text: '升級！', color: '#ffe066', t: 0, dur: 0.9 });
+    const ult = tw.lv === MAX_LV;
+    this.effects.push({ type: 'text', x: tw.x, y: tw.y - 20, text: ult ? '終極強化！' : '升級！', color: ult ? '#ff9f1c' : '#ffe066', t: 0, dur: ult ? 1.3 : 0.9, big: ult });
+    if (ult) { this.burst(tw.x, tw.y, 16, 'confettiBurst'); this.shake = 0.15; }
     this.effects.push({ type: 'ring', x: tw.x, y: tw.y, r: 34, color: '#ffe066', t: 0, dur: 0.5, grow: true });
     this.effects.push({ type: 'beamup', x: tw.x, y: tw.y, t: 0, dur: 0.6 });
     this.burst(tw.x, tw.y, 10, 'star');
@@ -1455,6 +1457,15 @@ class Game {
     const sx = sc * (1 + k * 0.08), sy = sc * (1 - k * 0.08);
     c.save();
     c.translate(x, y + 18); c.scale(sx, sy); c.translate(-x, -(y + 18));
+    if (tw.lv >= MAX_LV) {
+      // 終極等級：金色光環
+      const pulse = 0.5 + Math.sin(this.rt * 4 + tw.id) * 0.5;
+      c.fillStyle = `rgba(255,200,40,${0.18 + pulse * 0.15})`;
+      c.beginPath(); c.arc(x, y, 27 + pulse * 2, 0, Math.PI * 2); c.fill();
+      c.strokeStyle = 'rgba(255,215,80,0.9)'; c.lineWidth = 2; c.setLineDash([5, 5]); c.lineDashOffset = -this.rt * 20;
+      c.beginPath(); c.arc(x, y, 26, 0, Math.PI * 2); c.stroke();
+      c.setLineDash([]); c.lineDashOffset = 0;
+    }
     c.fillStyle = 'rgba(0,0,0,0.2)';
     c.beginPath(); c.ellipse(x + 2, y + 17, 19, 6, 0, 0, Math.PI * 2); c.fill();
     const g = c.createLinearGradient(x, y - 20, x, y + 20);
@@ -1491,16 +1502,17 @@ class Game {
 
     // 等級星星
     for (let i = 0; i < tw.lv; i++) {
-      c.fillStyle = '#ffd84a'; c.strokeStyle = '#8a6500'; c.lineWidth = 1;
-      c.beginPath(); c.arc(x - (tw.lv - 1) * 5 + i * 10, y + 19, 3.5, 0, Math.PI * 2); c.fill(); c.stroke();
+      c.fillStyle = tw.lv >= MAX_LV ? '#ff9f1c' : '#ffd84a'; c.strokeStyle = '#8a6500'; c.lineWidth = 1;
+      c.beginPath(); c.arc(x - (tw.lv - 1) * 4.5 + i * 9, y + 19, 3.5, 0, Math.PI * 2); c.fill(); c.stroke();
     }
+    if (tw.lv >= MAX_LV) drawEmoji(c, '👑', x - 15, y - 17, 12, false, 1, -0.3);
     if (tw.branch != null) {
       c.fillStyle = tw.branch === 0 ? '#ff8a3d' : '#4f8ff0';
       c.beginPath(); c.arc(x + 15, y - 15, 7, 0, Math.PI * 2); c.fill();
       c.fillStyle = '#fff'; c.font = 'bold 10px sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
       c.fillText(tw.branch === 0 ? 'A' : 'B', x + 15, y - 14.5);
     }
-    if (tw.buffed) { c.fillStyle = '#5dff8a'; c.font = 'bold 11px sans-serif'; c.textAlign = 'center'; c.fillText('▲', x - 15, y - 14); }
+    if (tw.buffed) { c.fillStyle = '#5dff8a'; c.font = 'bold 11px sans-serif'; c.textAlign = 'center'; c.fillText('▲', x - 20, y + 4); }
     if (tw.stunUntil > t) drawEmoji(c, '💫', x, y - 24, 18, false, 1, t * 4);
     if (s.kind === 'mine') {
       // 金礦閃光

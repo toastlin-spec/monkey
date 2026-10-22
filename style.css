@@ -41,7 +41,7 @@ body {
 }
 .btn:hover:not(:disabled) { filter: brightness(1.04); transform: translateY(-1px); }
 .btn:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 1px 0 rgba(120,80,40,.18); }
-.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn:disabled, .btn[aria-disabled="true"] { opacity: .45; cursor: not-allowed; }
 .btn.primary { background: var(--primary); border-color: var(--primary-dark); color: #fff; }
 .btn.green { background: var(--green); border-color: #379a52; color: #fff; }
 .btn.red { background: var(--red); border-color: #c63f3f; color: #fff; }
@@ -66,6 +66,7 @@ h1 { font-size: 44px; font-weight: 900; margin: 4px 0; color: var(--primary-dark
   text-shadow: 3px 3px 0 #ffd9a8; }
 .subtitle { margin: 0 0 24px; color: var(--ink-soft); font-weight: 700; }
 .menu-btns { display: flex; flex-direction: column; gap: 12px; }
+.version { margin: 16px 0 -12px; font-size: 12px; opacity: .5; letter-spacing: 1px; }
 .parade { font-size: 34px; display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
 .parade span { display: inline-block; animation: bounce 1s ease-in-out infinite; }
 .parade span:nth-child(2n) { animation-delay: .2s; }
@@ -193,6 +194,8 @@ h1 { font-size: 44px; font-weight: 900; margin: 4px 0; color: var(--primary-dark
   color: #fff; font-weight: 900; font-size: 18px; text-shadow: 0 1px 2px #000; pointer-events: none; }
 .skill.active { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary); }
 .skill:disabled { cursor: not-allowed; }
+.skill.poor { opacity: .55; }
+.skill.poor .sk-cost { color: var(--red); }
 
 /* ---------- 介面動畫 ---------- */
 .gold-bump { animation: goldbump .35s ease-out; }
@@ -208,7 +211,14 @@ h1 { font-size: 44px; font-weight: 900; margin: 4px 0; color: var(--primary-dark
 .screen.active { animation: fadein .3s ease-out; }
 @keyframes fadein { from { opacity: 0; } }
 .chapter:not(.locked):hover canvas { filter: saturate(1.25) brightness(1.05); }
-.talent .btn:not(:disabled):active { animation: pop .2s; }
+/* 觸控裝置：取消雙擊放大，讓連續點擊每一下都算數 */
+button, .shop-item, .chapter, .skill, label { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.talent .btn.lack { background: #f1ebe2; border-color: var(--line); color: var(--ink-soft); }
+.talent .t-msg { font-size: 13px; color: var(--red); font-weight: 700; min-height: 0; }
+.talent.upgraded { animation: glow .5s ease-out; }
+@keyframes glow { 0% { box-shadow: 0 0 0 0 rgba(255,184,0,.9); } 100% { box-shadow: 0 0 0 16px rgba(255,184,0,0); } }
+.shake { animation: shake .35s; }
+@keyframes shake { 20%,60% { transform: translateX(-6px); } 40%,80% { transform: translateX(6px); } }
 .modal-card .big-emoji { animation: bounce 1.2s ease-in-out infinite; display: inline-block; }
 .sliders { display: flex; flex-direction: column; gap: 10px; margin: 12px 0; text-align: left; }
 .slider-row { display: grid; grid-template-columns: 110px 1fr 36px; align-items: center; gap: 10px; font-weight: 700; }

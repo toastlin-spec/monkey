@@ -158,19 +158,32 @@ function renderTalents() {
   list.innerHTML = '';
   for (const t of TALENTS) {
     const lv = Save.talent(t.id), cost = talentCost(lv), max = lv >= t.max;
+    const lack = !max && Save.freeStars() < cost;
     const el = document.createElement('div');
     el.className = 'talent';
+    el.dataset.id = t.id;
+    // 星星不夠時按鈕不設 disabled：手機上被停用的按鈕點了完全沒反應，改成點了會說明原因
     el.innerHTML = `
       <div class="t-head"><span class="t-icon">${t.icon}</span>${t.name}</div>
       <div class="t-desc">${t.desc}</div>
       <div class="pips">${Array.from({ length: t.max }, (_, i) => `<i class="${i < lv ? 'on' : ''}"></i>`).join('')}</div>
       <div class="t-desc">目前：${lv ? t.fmt(lv * t.per) : '—'}</div>
-      <button class="btn small ${max ? '' : 'primary'}" ${max || Save.freeStars() < cost ? 'disabled' : ''}>${max ? '已滿級' : `升級（⭐ ${cost}）`}</button>`;
+      <div class="t-msg"></div>
+      <button type="button" class="btn small ${max ? '' : lack ? 'lack' : 'primary'}" ${max ? 'disabled' : ''}>${max ? '已滿級' : `升級（⭐ ${cost}）`}</button>`;
     el.querySelector('button').addEventListener('click', () => {
-      if (Save.freeStars() < cost || max) return;
+      if (max) return;
+      if (Save.freeStars() < cost) {
+        el.querySelector('.t-msg').textContent = `還差 ⭐${cost - Save.freeStars()}，去闖關賺星星吧！`;
+        bump(el, 'shake');
+        SoundFX.play('deny');
+        return;
+      }
       Save.data.talents[t.id] = lv + 1;
       Save.save();
+      SoundFX.play('upgrade');
       renderTalents();
+      const card = list.querySelector(`[data-id="${t.id}"]`);
+      if (card) bump(card, 'upgraded');
     });
     list.appendChild(el);
   }
@@ -189,7 +202,7 @@ function showHelp() {
     <ul>
       <li>點右側商店的塔 → 點地圖空地放置（按住 <span class="kbd">Shift</span> 可連續放）</li>
       <li>點已放置的塔可以 <b>升級</b>、<b>賣出</b>、切換 <b>攻擊目標</b></li>
-      <li>每座塔最高 3 級，升到第 3 級時要從兩條路線 <b>A / B 選一條</b></li>
+      <li>每座塔最高 4 級：升到第 3 級時要從兩條路線 <b>A / B 選一條</b>，第 4 級是 <b>👑 終極強化</b></li>
       <li><span class="kbd">空白鍵</span> 開始下一關、<span class="kbd">Esc</span> 或右鍵取消</li>
     </ul>
     <h3>👑 BOSS</h3>
@@ -444,7 +457,8 @@ const UI = {
       b.querySelector('.sk-cdt').textContent = left > 0 ? Math.ceil(left) : '';
       if (b.dataset.cooling === '1' && left <= 0) bump(b, 'ready');
       b.dataset.cooling = left > 0 ? '1' : '0';
-      b.disabled = g.over || left > 0 || g.gold < s.cost;
+      b.disabled = g.over || left > 0;
+      b.classList.toggle('poor', g.gold < s.cost);
       b.classList.toggle('active', g.targeting === s.id);
     }
 
@@ -476,12 +490,15 @@ const UI = {
       const d = sel.def, s = sel.s, cost = g.upgradeCostOf(sel), can = g.gold >= cost;
       let up = '';
       if (sel.lv === 1) {
-        up = `<button class="btn green" data-act="up" ${can ? '' : 'disabled'}>⬆ 升到 Lv2（💰${cost}）</button>`;
+        up = `<button class="btn green" data-act="up" ${can ? '' : 'aria-disabled="true"'}>⬆ 升到 Lv2（💰${cost}）</button>`;
       } else if (sel.lv === 2) {
         up = `<div class="desc">升到 Lv3 請選一條路線（💰${cost}）：</div>` + d.branches.map((b, i) =>
-          `<button class="btn ${i ? 'primary' : 'green'} branch" data-act="br" data-b="${i}" ${can ? '' : 'disabled'}><span>${i ? 'B' : 'A'}．${b.name}</span><small>${b.desc}</small></button>`).join('');
+          `<button class="btn ${i ? 'primary' : 'green'} branch" data-act="br" data-b="${i}" ${can ? '' : 'aria-disabled="true"'}><span>${i ? 'B' : 'A'}．${b.name}</span><small>${b.desc}</small></button>`).join('');
+      } else if (sel.lv < MAX_LV) {
+        up = `<div class="desc">路線：${sel.branch ? 'B' : 'A'}．${d.branches[sel.branch].name}</div>
+          <button class="btn primary branch" data-act="up" ${can ? '' : 'aria-disabled="true"'}><span>👑 終極強化 Lv${MAX_LV}（💰${cost}）</span><small>全部數值大幅提升，路線效果再加強</small></button>`;
       } else {
-        up = `<div class="desc">🏅 已滿級：${sel.branch ? 'B' : 'A'}．${d.branches[sel.branch].name}</div>`;
+        up = `<div class="desc">👑 已達終極 Lv${MAX_LV}：${sel.branch ? 'B' : 'A'}．${d.branches[sel.branch].name}</div>`;
       }
       const modes = AIM_KINDS.has(s.kind) ? `<div class="desc">攻擊目標：</div><div class="modes">${TARGET_MODES.map(([m, n]) =>
         `<button data-mode="${m}" class="${sel.mode === m ? 'on' : ''}">${n}</button>`).join('')}</div>` : '';
@@ -509,7 +526,7 @@ const UI = {
         <div class="desc">${d.desc}</div>
         ${un ? '' : `<div class="desc" style="color:#c63f3f">🔒 第 ${d.unlock} 關解鎖</div>`}
         <dl class="stats">${statLines(computeStats(d, 1, null))}</dl>
-        <div class="desc">Lv3 路線：<br>A．${d.branches[0].name} — ${d.branches[0].desc}<br>B．${d.branches[1].name} — ${d.branches[1].desc}</div>
+        <div class="desc">Lv3 路線：<br>A．${d.branches[0].name} — ${d.branches[0].desc}<br>B．${d.branches[1].name} — ${d.branches[1].desc}<br>Lv4：👑 終極強化</div>
         ${g.placing === showType ? '<div class="desc">👉 點地圖放置，右鍵 / Esc 取消</div>' : ''}`;
       return;
     }

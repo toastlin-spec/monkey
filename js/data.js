@@ -179,7 +179,12 @@ const TOWER_ORDER = ['mg', 'shotgun', 'freeze', 'laser', 'spike', 'mortar', 'sni
 const AIM_KINDS = new Set(['bullet', 'spread', 'beam', 'mortar', 'sniper', 'flame', 'chain', 'missile', 'wind', 'blackhole']);
 const TARGET_MODES = [['first', '最前'], ['last', '最後'], ['strong', '最強'], ['close', '最近']];
 
-const LV_DMG = [1, 1.6, 2.4], LV_RANGE = [1, 1.1, 1.2], LV_RATE = [1, 1.1, 1.25];
+// 炮塔最高 4 級：Lv2 一般強化、Lv3 選 A/B 路線、Lv4 終極強化
+const MAX_LV = 4;
+const LV_DMG = [1, 1.6, 2.4, 3.6], LV_RANGE = [1, 1.1, 1.2, 1.3], LV_RATE = [1, 1.1, 1.25, 1.4];
+// Lv4 額外加成（套在路線效果之後，所以路線設定的數值也會再變強）
+const LV4_ADD = { heal: 1, shield: 1, chains: 2, pellets: 2, count: 1, crit: 0.1, stun: 0.2, mark: 0.1, interest: 0.02, freezeChance: 0.05, rampMax: 1, vuln: 0.1 };
+const LV4_MUL = { uses: 1.35, knock: 1.2, splash: 1.15, freezeDur: 1.2, poisonDur: 1.2, burnDur: 1.2, hold: 1.3 };
 function computeStats(def, lv, branch) {
   const i = lv - 1, s = {};
   for (const k in def) if (k !== 'branches' && k !== 'desc' && k !== 'name') s[k] = def[k];
@@ -191,21 +196,28 @@ function computeStats(def, lv, branch) {
   if (def.rate) s.rate = def.rate * LV_RATE[i];
   if (def.slow) s.slow = def.slow - 0.05 * i;
   if (def.freezeChance) s.freezeChance = def.freezeChance + 0.02 * i;
-  if (def.uses) s.uses = Math.round(def.uses * [1, 1.4, 1.8][i]);
-  if (def.gold) s.gold = Math.round(def.gold * [1, 1.8, 2.8][i]);
-  if (def.heal) s.heal = [1, 2, 2][i];
+  if (def.uses) s.uses = Math.round(def.uses * [1, 1.4, 1.8, 1.8][i]);
+  if (def.gold) s.gold = Math.round(def.gold * [1, 1.8, 2.8, 4][i]);
+  if (def.heal) s.heal = [1, 2, 2, 2][i];
   if (def.rangeBuff) s.rangeBuff = def.rangeBuff + 0.05 * i;
   if (def.rateBuff) s.rateBuff = def.rateBuff + 0.05 * i;
-  if (def.cd) s.cd = def.cd * [1, 0.9, 0.8][i];
-  if (def.vuln) s.vuln = def.vuln + 0.05 * i;
+  if (def.cd) s.cd = def.cd * [1, 0.9, 0.8, 0.7][i];
+  if (def.vuln) s.vuln = def.vuln + 0.05 * Math.min(i, 2);
   if (branch != null) {
     const b = def.branches[branch];
     if (b.mul) for (const k in b.mul) s[k] = (s[k] || 0) * b.mul[k];
     if (b.set) Object.assign(s, b.set);
   }
+  if (lv >= 4) {
+    for (const k in LV4_ADD) if (s[k]) s[k] += LV4_ADD[k];
+    for (const k in LV4_MUL) if (s[k]) s[k] *= LV4_MUL[k];
+    if (s.uses) s.uses = Math.round(s.uses);
+    // 減速數值越小越強
+    if (s.slow) s.slow = Math.max(0.3, s.slow - 0.05);
+  }
   return s;
 }
-function upgradeCost(def, lv) { return lv === 1 ? Math.round(def.cost * 0.8) : Math.round(def.cost * 1.5); }
+function upgradeCost(def, lv) { return Math.round(def.cost * [0.8, 1.5, 2.5][lv - 1]); }
 
 // ---------- 動物 ----------
 const ENEMIES = {
